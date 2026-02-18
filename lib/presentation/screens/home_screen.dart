@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_provider.dart';
 import '../providers/clock_provider.dart';
 import '../providers/monk_mode_provider.dart';
+import '../providers/monk_mode_timer_provider.dart';
+import '../providers/streak_provider.dart';
 import '../../domain/entities/app_entity.dart';
 
 /// Pantalla principal del launcher: fondo negro, texto blanco,
@@ -16,6 +18,8 @@ class HomeScreen extends ConsumerWidget {
     final clockAsync = ref.watch(clockProvider);
     final appsAsync = ref.watch(appsProvider);
     final isMonkModeActive = ref.watch(monkModeProvider);
+    // Observar el temporizador para que el StateNotifier se inicialice y escuche cambios.
+    final timerState = ref.watch(monkModeTimerProvider);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -34,9 +38,30 @@ class HomeScreen extends ConsumerWidget {
               const SizedBox(height: 24),
               // Desbloqueos hoy (mockeado)
               const _UnlocksSection(unlocksToday: 12),
+              const SizedBox(height: 8),
+              // Racha actual (mockeado)
+              Consumer(
+                builder: (context, ref, _) {
+                  final streak = ref.watch(streakProvider);
+                  return _StreakSection(streakDays: streak);
+                },
+              ),
               const SizedBox(height: 40),
               // Botón Activate Monk Mode / Monk Mode Active
               const _MonkModeButton(),
+              // Tiempo restante del temporizador (solo si está activo)
+              if (timerState.isActive)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Text(
+                    'Tiempo restante: ${timerState.formattedTime}',
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 48),
               // Lista de apps (3 si Monk Mode activo, 6 si no)
               Expanded(
@@ -123,7 +148,27 @@ class _UnlocksSection extends StatelessWidget {
   }
 }
 
+/// Sección "Racha actual". Valor mockeado por ahora.
+class _StreakSection extends StatelessWidget {
+  final int streakDays;
+
+  const _StreakSection({required this.streakDays});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'Racha actual: $streakDays ${streakDays == 1 ? 'día' : 'días'}',
+      style: const TextStyle(
+        color: Colors.white54,
+        fontSize: 16,
+        fontWeight: FontWeight.w400,
+      ),
+    );
+  }
+}
+
 /// Botón de activar/desactivar Monk Mode. Borde blanco fino, mayúsculas, sin sombras.
+/// Muestra diálogo de confirmación cuando Monk Mode está activo.
 class _MonkModeButton extends ConsumerWidget {
   const _MonkModeButton();
 
@@ -134,7 +179,13 @@ class _MonkModeButton extends ConsumerWidget {
 
     return GestureDetector(
       onTap: () {
-        ref.read(monkModeProvider.notifier).state = !isActive;
+        if (isActive) {
+          // Mostrar diálogo de confirmación antes de desactivar.
+          _showBreakBlockDialog(context, ref);
+        } else {
+          // Activar Monk Mode directamente.
+          ref.read(monkModeProvider.notifier).state = true;
+        }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -149,6 +200,103 @@ class _MonkModeButton extends ConsumerWidget {
             fontSize: 14,
             fontWeight: FontWeight.w400,
             letterSpacing: 1,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Muestra el diálogo de confirmación para romper el bloque.
+  void _showBreakBlockDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (dialogContext) => const _BreakBlockDialog(),
+    );
+  }
+}
+
+/// Diálogo modal minimalista para confirmar romper el bloque de enfoque.
+class _BreakBlockDialog extends ConsumerWidget {
+  const _BreakBlockDialog();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Dialog(
+      backgroundColor: Colors.black,
+      shape: const RoundedRectangleBorder(
+        side: BorderSide(color: Colors.white, width: 1),
+        borderRadius: BorderRadius.zero,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '¿Seguro que quieres romper tu bloque de enfoque?',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+            const SizedBox(height: 32),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _DialogButton(
+                  label: 'CONTINUAR ENFOQUE',
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+                const SizedBox(width: 16),
+                _DialogButton(
+                  label: 'ROMPER BLOQUE',
+                  onTap: () {
+                    // Resetear racha a 0.
+                    ref.read(streakProvider.notifier).state = 0;
+                    // Desactivar Monk Mode.
+                    ref.read(monkModeProvider.notifier).state = false;
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Botón del diálogo: borde blanco fino, texto mayúsculas, sin sombras.
+class _DialogButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _DialogButton({
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.white, width: 1),
+          borderRadius: BorderRadius.zero,
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w400,
+            letterSpacing: 0.5,
           ),
         ),
       ),
