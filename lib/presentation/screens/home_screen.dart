@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_provider.dart';
 import '../providers/clock_provider.dart';
+import '../providers/monk_mode_provider.dart';
 import '../../domain/entities/app_entity.dart';
 
 /// Pantalla principal del launcher: fondo negro, texto blanco,
-/// hora grande, fecha y lista de apps solo texto. Sin iconos.
+/// hora, fecha, desbloqueos, botón Monk Mode y lista de apps. Sin iconos.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -14,6 +15,7 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final clockAsync = ref.watch(clockProvider);
     final appsAsync = ref.watch(appsProvider);
+    final isMonkModeActive = ref.watch(monkModeProvider);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -23,17 +25,28 @@ class HomeScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Hora actual grande (actualización cada minuto)
+              // Hora y fecha
               clockAsync.when(
                 data: (state) => _ClockSection(time: state.time, date: state.date),
                 loading: () => const _ClockSection(time: '--:--', date: '...'),
                 error: (_, __) => const _ClockSection(time: '--:--', date: 'Error'),
               ),
+              const SizedBox(height: 24),
+              // Desbloqueos hoy (mockeado)
+              const _UnlocksSection(unlocksToday: 12),
+              const SizedBox(height: 40),
+              // Botón Activate Monk Mode / Monk Mode Active
+              const _MonkModeButton(),
               const SizedBox(height: 48),
-              // Lista vertical de apps (solo texto)
+              // Lista de apps (3 si Monk Mode activo, 6 si no)
               Expanded(
                 child: appsAsync.when(
-                  data: (apps) => _AppList(apps: apps),
+                  data: (apps) {
+                    final visibleApps = isMonkModeActive
+                        ? apps.take(3).toList()
+                        : apps;
+                    return _AppList(apps: visibleApps);
+                  },
                   loading: () => const Center(
                     child: Text(
                       'Cargando...',
@@ -87,6 +100,58 @@ class _ClockSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Sección "Desbloqueos hoy". Valor mockeado por ahora.
+class _UnlocksSection extends StatelessWidget {
+  final int unlocksToday;
+
+  const _UnlocksSection({required this.unlocksToday});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'Desbloqueos hoy: $unlocksToday',
+      style: const TextStyle(
+        color: Colors.white54,
+        fontSize: 16,
+        fontWeight: FontWeight.w400,
+      ),
+    );
+  }
+}
+
+/// Botón de activar/desactivar Monk Mode. Borde blanco fino, mayúsculas, sin sombras.
+class _MonkModeButton extends ConsumerWidget {
+  const _MonkModeButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isActive = ref.watch(monkModeProvider);
+    final label = isActive ? 'MONK MODE ACTIVE' : 'ACTIVATE MONK MODE';
+
+    return GestureDetector(
+      onTap: () {
+        ref.read(monkModeProvider.notifier).state = !isActive;
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.white, width: 1),
+          borderRadius: BorderRadius.zero,
+        ),
+        child: Text(
+          '[ $label ]',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            letterSpacing: 1,
+          ),
+        ),
+      ),
     );
   }
 }
