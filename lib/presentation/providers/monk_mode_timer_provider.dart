@@ -40,11 +40,11 @@ class MonkModeTimerNotifier extends StateNotifier<MonkModeTimerState> {
   MonkModeTimerNotifier(this._ref) : super(const MonkModeTimerState(remainingSeconds: 0)) {
     // Escuchar cambios en monkModeProvider y reaccionar.
     _ref.listen<bool>(monkModeProvider, (previous, next) {
-      if (next && !previous) {
+      if (next == true && previous != true) {
         // Monk Mode se acaba de activar: iniciar temporizador y bloqueo de apps.
         _startTimer();
         _activateAppBlocker();
-      } else if (!next && previous) {
+      } else if (next == false && previous == true) {
         // Monk Mode se desactivó manualmente: detener temporizador y bloqueo.
         _stopTimer();
         _deactivateAppBlocker();
@@ -85,15 +85,15 @@ class MonkModeTimerNotifier extends StateNotifier<MonkModeTimerState> {
   /// Todas las demás apps quedarán bloqueadas.
   Future<void> _activateAppBlocker() async {
     try {
-      final appsAsync = _ref.read(appsProvider);
-      final apps = await appsAsync.future;
+      final asyncApps = _ref.read(appsProvider);
+      final apps = asyncApps.value;
 
-      // Obtener las 3 primeras apps (las que se muestran en Monk Mode).
-      final allowedApps = apps.take(3).map((app) => app.id).toList();
-
-      final blockerService = _ref.read(appBlockerServiceProvider);
-      await blockerService.setAllowedApps(allowedApps);
-      await blockerService.startMonitoring();
+      if (apps != null) {
+        final allowedApps = apps.take(3).map((e) => e.id).toList();
+        final blockerService = _ref.read(appBlockerServiceProvider);
+        await blockerService.setAllowedApps(allowedApps);
+        await blockerService.startMonitoring();
+      }
     } catch (e) {
       // En caso de error, solo loguear. No bloquear la activación de Monk Mode.
       // TODO: manejar errores apropiadamente cuando haya implementación real.
